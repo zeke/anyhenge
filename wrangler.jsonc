@@ -1,0 +1,14 @@
+{
+  "name": "anyhenge",
+  "compatibility_date": "2025-03-13",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public"
+  },
+  "routes": [
+    {
+      "pattern": "anyhenge.ziki.boo/*",
+      "zone_name": "ziki.boo"
+    }
+  ]
+}
