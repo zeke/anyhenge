@@ -1,0 +1,8 @@
+{
+  "name": "anyhenge",
+  "private": true,
+  "scripts": {
+    "dev": "script/dev",
+    "deploy": "wrangler deploy"
+  }
+}

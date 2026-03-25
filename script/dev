@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -e
+
+# Start wrangler dev in the background on port 8787
+npx wrangler dev --port 8787 &
+WRANGLER_PID=$!
+
+# Give wrangler a moment to start
+sleep 2
+
+# Proxy wrangler through browser-sync for live reload.
+# browser-sync watches public/ and reloads whenever any file changes.
+npx browser-sync start \
+  --proxy "localhost:8787" \
+  --port 3000 \
+  --files "public/**/*" \
+  --no-notify \
+  --no-open &
+BS_PID=$!
+
+# Open the browser-sync URL
+sleep 2
+open http://localhost:3000
+
+# On Ctrl-C, kill both processes
+trap "kill $WRANGLER_PID $BS_PID 2>/dev/null" EXIT INT TERM
+wait

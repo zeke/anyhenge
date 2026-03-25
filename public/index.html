@@ -129,6 +129,7 @@
     .slider-group {
       display: flex;
       align-items: center;
+      flex-direction: column;
     }
 
     input[type=range] {
@@ -161,6 +162,58 @@
       background: #f59e0b;
       cursor: pointer;
       border: 3px solid #0f0f0f;
+    }
+
+    /* ── solstice/equinox markers ── */
+    #solstice-markers {
+      position: relative;
+      width: 100%;
+      height: 14px;
+      margin-top: 2px;
+    }
+
+    .sol-dot {
+      position: absolute;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #fff;
+      opacity: 0.28;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+
+    /* Expand hit target to ~28px without changing the visual dot size */
+    .sol-dot::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 28px;
+      height: 28px;
+      transform: translate(-50%, -50%);
+    }
+
+    .sol-dot:hover {
+      opacity: 0.9;
+      transform: translate(-50%, -50%) scale(1.5);
+    }
+
+    #sol-tooltip {
+      position: fixed;
+      pointer-events: none;
+      background: rgba(15, 15, 15, 0.88);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #d1d5db;
+      font-size: 11px;
+      line-height: 1.5;
+      padding: 5px 9px;
+      border-radius: 5px;
+      white-space: nowrap;
+      z-index: 2000;
+      display: none;
     }
 
     /* ── pulsing user location dot (via Leaflet divIcon) ── */
@@ -213,9 +266,12 @@
   <div id="sliders">
     <div class="slider-group">
       <input type="range" id="sl-date" min="0" max="364" value="0" />
+      <div id="solstice-markers"></div>
     </div>
   </div>
 </div>
+
+<div id="sol-tooltip"></div>
 
 <script>
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -378,6 +434,124 @@ slDate.addEventListener('input', () => {
   refreshLabels();
   updateSunLine();
 });
+
+// ── solstice / equinox markers ────────────────────────────────────────────────
+
+const SOLAR_EVENTS = [
+  { month: 2,  day: 20, nhLabel: 'Spring Equinox', shLabel: 'Fall Equinox'    },
+  { month: 5,  day: 21, nhLabel: 'Summer Solstice', shLabel: 'Winter Solstice' },
+  { month: 8,  day: 22, nhLabel: 'Fall Equinox',   shLabel: 'Spring Equinox'  },
+  { month: 11, day: 21, nhLabel: 'Winter Solstice', shLabel: 'Summer Solstice' },
+];
+
+// Thumb physical half-width in px (matches CSS: 22px thumb)
+const THUMB_HALF = 11;
+
+// Compute left% position that matches where the range thumb sits for a given value.
+// The browser offsets the thumb so it stays inside the track ends:
+//   left = value/max * (trackWidth - thumbW) + thumbHalf
+// As a percentage of trackWidth: left% ≈ N% adjusted by thumb size.
+// The standard approximation: left = calc(N% + (thumbHalf - N% * thumbWidth / 100))
+// which simplifies to: left = calc(N% - (2N - 100) * thumbHalf / 100)
+function dotLeft(doy, sliderMax) {
+  const pct = doy / sliderMax * 100;
+  return `calc(${pct}% + ${THUMB_HALF - pct * 2 * THUMB_HALF / 100}px)`;
+}
+
+function buildSolsticeMarkers() {
+  const sliderMax = parseInt(slDate.max, 10);
+  const container = document.getElementById('solstice-markers');
+  const tooltip   = document.getElementById('sol-tooltip');
+  container.innerHTML = '';
+
+  SOLAR_EVENTS.forEach(ev => {
+    const doy = dayOfYear(new Date(year, ev.month, ev.day));
+
+    const dot = document.createElement('div');
+    dot.className = 'sol-dot';
+    dot.style.left = dotLeft(doy, sliderMax);
+    dot.dataset.doy = doy;
+
+    // Tooltip content — hemisphere order based on current map center
+    dot.addEventListener('mouseenter', () => {
+      const lat = map.getCenter().lat;
+      const isNH = lat >= 0;
+      const line1 = isNH ? ev.nhLabel : ev.shLabel;
+      const line2 = isNH ? ev.shLabel : ev.nhLabel;
+      const hemi1 = isNH ? 'Northern Hemisphere' : 'Southern Hemisphere';
+      const hemi2 = isNH ? 'Southern Hemisphere' : 'Northern Hemisphere';
+      const d = new Date(year, ev.month, ev.day);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+
+      tooltip.innerHTML =
+        `<strong style="color:#f3f4f6">${line1} (${hemi1})</strong><br>` +
+        `${line2} (${hemi2})<br>` +
+        `<span style="color:#6b7280;font-size:10px">~${dateStr}</span>`;
+      tooltip.style.display = 'block';
+      positionTooltip(dot);
+    });
+
+    dot.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
+
+    dot.addEventListener('click', () => {
+      tooltip.style.display = 'none';
+      tweenToDoy(doy);
+    });
+
+    container.appendChild(dot);
+  });
+}
+
+function positionTooltip(dot) {
+  const tooltip = document.getElementById('sol-tooltip');
+  const margin  = 8;
+  const gap     = 10; // gap between dot top and tooltip bottom
+  const rect    = dot.getBoundingClientRect();
+  const dotCx   = rect.left + rect.width / 2;
+  const tw      = tooltip.offsetWidth;
+  const th      = tooltip.offsetHeight;
+
+  // Center horizontally above the dot, then clamp to viewport
+  let x = dotCx - tw / 2;
+  x = Math.max(margin, Math.min(x, window.innerWidth - tw - margin));
+
+  // Place above the dot; if no room, flip below
+  let y = rect.top - th - gap;
+  if (y < margin) y = rect.bottom + gap;
+
+  tooltip.style.left = x + 'px';
+  tooltip.style.top  = y + 'px';
+}
+
+// ── tween to DOY with cubic ease-out ─────────────────────────────────────────
+
+let tweenRaf = null;
+
+function tweenToDoy(targetDoy, duration = 600) {
+  if (tweenRaf !== null) cancelAnimationFrame(tweenRaf);
+  const startDoy  = currentDoy;
+  const startTime = performance.now();
+
+  function step(now) {
+    const t      = Math.min((now - startTime) / duration, 1);
+    const eased  = 1 - Math.pow(1 - t, 3); // cubic ease-out
+    currentDoy   = Math.round(startDoy + (targetDoy - startDoy) * eased);
+    slDate.value = currentDoy;
+    refreshLabels();
+    updateSunLine();
+    if (t < 1) {
+      tweenRaf = requestAnimationFrame(step);
+    } else {
+      tweenRaf = null;
+    }
+  }
+
+  tweenRaf = requestAnimationFrame(step);
+}
+
+buildSolsticeMarkers();
 
 // ── map event wiring ──────────────────────────────────────────────────────────
 
