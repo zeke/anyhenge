@@ -10,6 +10,8 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+  <script src="https://unpkg.com/@photostructure/tz-lookup@11.7.0/tz.js"
+    integrity="sha256-VIEzwxmWops1EgJI46yS5Lf1DbUZOhxKTaIn54a1XDo=" crossorigin=""></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -279,9 +281,12 @@
 function toRad(d) { return d * Math.PI / 180; }
 function toDeg(r) { return r * 180 / Math.PI; }
 
-// Format a Date as "HH:MM" in local time
-function fmtTime(d) {
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+// Format a Date as "HH:MM TZ" in the time zone of the given lat/lng
+function fmtTime(d, lat, lng) {
+  return d.toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit', hour12: true,
+    timeZone: tzlookup(lat, lng), timeZoneName: 'short'
+  });
 }
 
 // Format a Date as "Mon Jan 1"
@@ -340,8 +345,11 @@ let currentDoy = fromHash ? fromHash.doy  : Math.min(dayOfYear(now), 364);
 const map = L.map('map', { zoomControl: true, attributionControl: true })
   .setView([initLat, initLng], initZoom);
 
+// CARTO key, Referer-restricted to anyhenge.ziki.boo (local dev shows watermark tiles)
+const CARTO_KEY = 'cb1_4cjr_1_c3a9057fdc430181bdd69387';
+
 L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${CARTO_KEY}`,
   {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
     subdomains: 'abcd',
@@ -409,7 +417,7 @@ function updateSunLine() {
 
   // Update readout
   document.getElementById('r-az').textContent = bearing.toFixed(1);
-  document.getElementById('r-sunset').textContent = fmtTime(sunset);
+  document.getElementById('r-sunset').textContent = fmtTime(sunset, lat, center.wrap().lng);
   document.getElementById('r-center').textContent =
     `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
   document.getElementById('r-zoom').textContent = map.getZoom();
