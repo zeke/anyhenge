@@ -1,9 +1,19 @@
 {
   "name": "anyhenge",
-  "compatibility_date": "2025-03-13",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-06",
   "workers_dev": true,
   "assets": {
-    "directory": "./public"
+    "directory": "./public",
+    "binding": "ASSETS",
+    // Let the Worker rewrite OpenGraph tags on the index page
+    "run_worker_first": ["/"]
+  },
+  // Browser Run, used to screenshot views for /og.jpg.
+  // quickAction() isn't supported locally, so dev uses the remote binding.
+  "browser": {
+    "binding": "BROWSER",
+    "remote": true
   },
   "routes": [
     {
